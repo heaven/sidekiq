@@ -38,6 +38,7 @@ class TestProcessor < Sidekiq::Test
     it 'executes a worker as expected' do
       worker = Minitest::Mock.new
       worker.expect(:perform, nil, [1, 2, 3])
+      worker.expect(:terminated?, false)
       @processor.execute_job(worker, [1, 2, 3])
     end
 

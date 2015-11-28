@@ -28,10 +28,15 @@ module Sidekiq
     attr_reader :thread
     attr_reader :job
 
+    # If we had to terminate the job before it finished
+    #  mark the processor as aborted
+    attr_reader :aborted
+
     def initialize(mgr)
       @mgr = mgr
       @down = false
       @done = false
+      @aborted = false
       @job = nil
       @thread = nil
       @strategy = (mgr.options[:fetch] || Sidekiq::BasicFetch).new(mgr.options)
@@ -40,6 +45,8 @@ module Sidekiq
     def terminate(wait=false)
       @done = true
       return if !@thread
+      # Let the job know we are shutting down
+      @worker.terminate if @worker
       @thread.value if wait
     end
 
@@ -77,7 +84,8 @@ module Sidekiq
     def process_one
       @job = fetch
       process(@job) if @job
-      @job = nil
+      # Keep aborted job to be re-queued
+      @job = nil unless @aborted
     end
 
     def get_one
@@ -147,7 +155,18 @@ module Sidekiq
     end
 
     def execute_job(worker, cloned_args)
+      # Keep a reference to the job, so #terminate can access it
+      @worker = worker
+
       worker.perform(*cloned_args)
+    ensure
+      # Save job status
+      terminated = @worker && @worker.terminated?
+
+      # Set aborted status only after removing the worker
+      #  (Manager calls dup on the workers Set during hard_shutdown)
+      @worker = nil
+      @aborted = !!terminated
     end
 
     def thread_identity

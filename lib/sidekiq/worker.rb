@@ -36,6 +36,14 @@ module Sidekiq
       Sidekiq.logger
     end
 
+    def terminate
+      @terminated = true
+    end
+
+    def terminated?
+      !!@terminated
+    end
+
     module ClassMethods
 
       def delay(*args)

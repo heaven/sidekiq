@@ -69,6 +69,8 @@ module Sidekiq
       remaining = deadline - Time.now
       while remaining > 0.5
         return if @workers.empty?
+        # All workers finished/aborted, no need to wait
+        break if @workers.reject(&:aborted).empty?
         sleep 0.5
         remaining = deadline - Time.now
       end
@@ -78,6 +80,9 @@ module Sidekiq
     end
 
     def processor_stopped(processor)
+      # Keep aborted processor in the pool for requeueing
+      return if processor.aborted
+
       @plock.synchronize do
         @workers.delete(processor)
       end
